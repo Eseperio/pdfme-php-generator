@@ -1,9 +1,9 @@
 <?php
 
-namespace Pdfme\Generator;
+namespace eseperio\PdfmeGenerator;
 
 use Mpdf\Mpdf;
-use Pdfme\Generator\Renderer\RendererRegistry;
+use eseperio\PdfmeGenerator\Renderer\RendererRegistry;
 
 class Generator
 {
@@ -16,54 +16,85 @@ class Generator
         $this->mpdfConfig = $mpdfConfig;
     }
 
-    public function generate(array $layout, array $data = []): string
+    /**
+     * Generate a PDF from a pdfme template and input data.
+     *
+     * @param array $template  pdfme template: ['basePdf' => ..., 'schemas' => [...]]
+     *                         `basePdf` can be a blank-page spec array
+     *                         (['width' => mm, 'height' => mm, 'padding' => [T, R, B, L]])
+     *                         or a base64-encoded PDF string.
+     *                         `schemas` is an array of pages; each page is an array of
+     *                         schema element definitions.
+     * @param array  $inputs   Array of input records. Each record is a flat key→value map
+     *                         where keys match schema element `name` properties.
+     *                         If multiple records are provided each one produces a page set;
+     *                         currently only the first record is used for all pages.
+     *
+     * @return string Raw PDF binary string
+     */
+    public function generate(array $template, array $inputs = []): string
     {
-        $pages = $layout['pages'] ?? $layout;
-        if (!is_array($pages) || $pages === []) {
+        $schemas = $template['schemas'] ?? [];
+        if ($schemas === []) {
             return '';
         }
 
-        $firstPage = $pages[0];
-        $mpdf = new Mpdf($this->buildMpdfConfig($firstPage));
+        $basePdf = $template['basePdf'] ?? [];
+
+        // Resolve data: first input record wins; fall back to sampledata from template
+        $inputData = $inputs[0] ?? $template['sampledata'][0] ?? [];
+
+        $mpdf = new Mpdf($this->buildMpdfConfig($basePdf));
         if (array_key_exists('compress', $this->mpdfConfig) && $this->mpdfConfig['compress'] === false) {
             $mpdf->SetCompression(false);
         }
 
-        $context = new RenderContext($mpdf, $data, $this->registry);
+        $context = new RenderContext($mpdf, $inputData, $this->registry);
 
-        foreach ($pages as $index => $page) {
-            if ($index === 0) {
-                $this->applyPageSetup($mpdf, $page);
-            }
-
-            $mpdf->AddPageByArray($this->buildPageDefinition($page));
-            $this->renderPage($context, $page, $data);
+        foreach ($schemas as $pageSchemas) {
+            $mpdf->AddPageByArray($this->buildPageDefinition($basePdf));
+            $this->renderPage($context, (array) $pageSchemas);
         }
 
         return $mpdf->Output('', 'S');
     }
 
-    private function renderPage(RenderContext $context, array $page, array $data): void
+    private function renderPage(RenderContext $context, array $schemas): void
     {
-        $elements = $page['elements'] ?? [];
-        foreach ($elements as $element) {
+        foreach ($schemas as $element) {
             $type = (string) ($element['type'] ?? '');
+            if (!$context->registry()->has($type)) {
+                continue;
+            }
             $renderer = $context->registry()->get($type);
-            $result = $renderer->render($context, $element, $data);
+            $result = $renderer->render($context, $element);
             $context->setLastResult($result);
         }
     }
 
-    private function buildMpdfConfig(array $page): array
+    private function buildMpdfConfig(mixed $basePdf): array
     {
         $config = $this->mpdfConfig;
 
-        if (isset($page['orientation'])) {
-            $config['orientation'] = strtoupper((string) $page['orientation']);
-        }
+        if (is_array($basePdf)) {
+            if (isset($basePdf['width']) && isset($basePdf['height'])) {
+                $config['format'] = [(float) $basePdf['width'], (float) $basePdf['height']];
+            }
 
-        if (isset($page['width']) && isset($page['height'])) {
-            $config['format'] = [(float) $page['width'], (float) $page['height']];
+            // padding: [top, right, bottom, left] or a single number
+            if (isset($basePdf['padding'])) {
+                [$mt, $mr, $mb, $ml] = $this->normalisePadding($basePdf['padding']);
+                $config['margin_top']    = $mt;
+                $config['margin_right']  = $mr;
+                $config['margin_bottom'] = $mb;
+                $config['margin_left']   = $ml;
+            } else {
+                // No margins: elements use absolute page coordinates
+                $config['margin_top']    = $config['margin_top']    ?? 0;
+                $config['margin_right']  = $config['margin_right']  ?? 0;
+                $config['margin_bottom'] = $config['margin_bottom'] ?? 0;
+                $config['margin_left']   = $config['margin_left']   ?? 0;
+            }
         }
 
         if (!isset($config['tempDir'])) {
@@ -73,37 +104,50 @@ class Generator
         return $config;
     }
 
-    private function buildPageDefinition(array $page): array
+    private function buildPageDefinition(mixed $basePdf): array
     {
-        $definition = [];
+        $definition = ['orientation' => 'P'];
 
-        $definition['orientation'] = strtoupper((string) ($page['orientation'] ?? $this->mpdfConfig['orientation'] ?? 'P'));
+        if (is_array($basePdf)) {
+            if (isset($basePdf['width']) && isset($basePdf['height'])) {
+                $definition['sheet-size'] = [(float) $basePdf['width'], (float) $basePdf['height']];
+            }
 
-        if (isset($page['width']) && isset($page['height'])) {
-            $definition['sheet-size'] = [(float) $page['width'], (float) $page['height']];
-        }
-
-        if (isset($page['margin'])) {
-            $definition['margin-left'] = (float) ($page['margin']['left'] ?? 15);
-            $definition['margin-right'] = (float) ($page['margin']['right'] ?? 15);
-            $definition['margin-top'] = (float) ($page['margin']['top'] ?? 16);
-            $definition['margin-bottom'] = (float) ($page['margin']['bottom'] ?? 16);
+            if (isset($basePdf['padding'])) {
+                [$mt, $mr, $mb, $ml] = $this->normalisePadding($basePdf['padding']);
+                $definition['margin-top']    = $mt;
+                $definition['margin-right']  = $mr;
+                $definition['margin-bottom'] = $mb;
+                $definition['margin-left']   = $ml;
+            } else {
+                $definition['margin-top']    = 0;
+                $definition['margin-right']  = 0;
+                $definition['margin-bottom'] = 0;
+                $definition['margin-left']   = 0;
+            }
         }
 
         return $definition;
     }
 
-    private function applyPageSetup(Mpdf $mpdf, array $page): void
+    /**
+     * Normalise a padding value to a [top, right, bottom, left] tuple (in mm).
+     *
+     * @param  int|float|array $padding
+     * @return array{0: float, 1: float, 2: float, 3: float}
+     */
+    private function normalisePadding(mixed $padding): array
     {
-        if (!isset($page['margin'])) {
-            return;
+        if (is_array($padding)) {
+            return [
+                (float) ($padding[0] ?? 0),
+                (float) ($padding[1] ?? 0),
+                (float) ($padding[2] ?? 0),
+                (float) ($padding[3] ?? 0),
+            ];
         }
 
-        $mpdf->SetMargins(
-            (float) ($page['margin']['left'] ?? 15),
-            (float) ($page['margin']['right'] ?? 15),
-            (float) ($page['margin']['top'] ?? 16)
-        );
-        $mpdf->SetAutoPageBreak(true, (float) ($page['margin']['bottom'] ?? 16));
+        $p = (float) $padding;
+        return [$p, $p, $p, $p];
     }
 }

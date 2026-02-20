@@ -1,11 +1,11 @@
 <?php
 
-namespace Pdfme\Generator\Renderer;
+namespace eseperio\PdfmeGenerator\Renderer;
 
-use Pdfme\Generator\RenderContext;
-use Pdfme\Generator\RenderResult;
+use eseperio\PdfmeGenerator\RenderContext;
+use eseperio\PdfmeGenerator\RenderResult;
 
 interface Renderer
 {
-    public function render(RenderContext $context, array $element, array $data): RenderResult;
+    public function render(RenderContext $context, array $element): RenderResult;
 }
