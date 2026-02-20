@@ -1,6 +1,6 @@
 <?php
 
-namespace Pdfme\Generator\Renderer;
+namespace eseperio\PdfmeGenerator\Renderer;
 
 use InvalidArgumentException;
 

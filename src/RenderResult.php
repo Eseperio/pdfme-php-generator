@@ -1,6 +1,6 @@
 <?php
 
-namespace Pdfme\Generator;
+namespace eseperio\PdfmeGenerator;
 
 class RenderResult
 {

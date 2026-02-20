@@ -1,9 +1,9 @@
 <?php
 
-namespace Pdfme\Generator;
+namespace eseperio\PdfmeGenerator;
 
 use Mpdf\Mpdf;
-use Pdfme\Generator\Renderer\RendererRegistry;
+use eseperio\PdfmeGenerator\Renderer\RendererRegistry;
 
 class RenderContext
 {
@@ -31,6 +31,26 @@ class RenderContext
         return $this->registry;
     }
 
+    /**
+     * Resolve element content: if the element has a `name` key that matches a key
+     * in the current input data, that value is used. Otherwise falls back to
+     * the element's own `content` property.
+     */
+    public function resolveContent(array $element): string
+    {
+        $name = $element['name'] ?? null;
+        if ($name !== null && array_key_exists($name, $this->data)) {
+            $value = $this->data[$name];
+            return is_scalar($value) ? (string) $value : '';
+        }
+
+        return (string) ($element['content'] ?? '');
+    }
+
+    /**
+     * Resolve a text string containing `{{ path.to.key }}` placeholders using
+     * dot-notation lookup in the current data map.
+     */
     public function resolveText(string $content): string
     {
         return preg_replace_callback('/{{\s*([\w\.]+)\s*}}/', function ($matches) {

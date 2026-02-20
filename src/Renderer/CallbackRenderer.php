@@ -1,9 +1,9 @@
 <?php
 
-namespace Pdfme\Generator\Renderer;
+namespace eseperio\PdfmeGenerator\Renderer;
 
-use Pdfme\Generator\RenderContext;
-use Pdfme\Generator\RenderResult;
+use eseperio\PdfmeGenerator\RenderContext;
+use eseperio\PdfmeGenerator\RenderResult;
 
 class CallbackRenderer implements Renderer
 {
@@ -11,15 +11,15 @@ class CallbackRenderer implements Renderer
     private $callback;
 
     /**
-     * @param callable(RenderContext, array, array): RenderResult $callback
+     * @param callable(RenderContext, array): RenderResult $callback
      */
     public function __construct(callable $callback)
     {
         $this->callback = $callback;
     }
 
-    public function render(RenderContext $context, array $element, array $data): RenderResult
+    public function render(RenderContext $context, array $element): RenderResult
     {
-        return ($this->callback)($context, $element, $data);
+        return ($this->callback)($context, $element);
     }
 }

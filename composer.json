@@ -1,5 +1,5 @@
 {
-  "name": "pdfme/php-generator",
+  "name": "eseperio/pdfme-php-generator",
   "description": "Generate PDFs from pdfme JSON layouts using mPDF without HTML rendering.",
   "type": "library",
   "license": "MIT",
@@ -12,12 +12,12 @@
   },
   "autoload": {
     "psr-4": {
-      "Pdfme\\Generator\\": "src/"
+      "eseperio\\PdfmeGenerator\\": "src/"
     }
   },
   "autoload-dev": {
     "psr-4": {
-      "Pdfme\\Generator\\Tests\\": "tests/"
+      "eseperio\\PdfmeGenerator\\Tests\\": "tests/"
     }
   },
   "scripts": {
